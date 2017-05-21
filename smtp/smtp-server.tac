@@ -5,13 +5,17 @@
 #    twistd -ny emailserver.tac
 
 """
-A toy email server.
+A little less toy email server.
 """
 from __future__ import print_function
+
+from hashlib import sha256
+import os.path
 
 from zope.interface import implementer
 
 from twisted.internet import defer
+from twisted.logger import Logger
 from twisted.mail import smtp
 from twisted.mail.imap4 import LOGINCredentials, PLAINCredentials
 
@@ -23,6 +27,8 @@ from twisted.cred.portal import Portal
 
 @implementer(smtp.IMessageDelivery)
 class ConsoleMessageDelivery:
+    log = Logger(namespace="smtp-server")
+    
     def receivedHeader(self, helo, origin, recipients):
         return "Received: ConsoleMessageDelivery"
 
@@ -33,13 +39,44 @@ class ConsoleMessageDelivery:
 
     
     def validateTo(self, user):
+        self.log.info("user: {user}", user=user.dest)
         # Only messages directed to the "console" user are accepted.
         if user.dest.local == "console":
             return lambda: ConsoleMessage()
+        elif str(user.dest) == "ben@test.org":
+            return lambda: DeliverMessage(str(user.dest))
         raise smtp.SMTPBadRcpt(user)
 
 
+@implementer(smtp.IMessage)
+class DeliverMessage:
+    def __init__(self, dest):
+        self.dest = dest
+        self.lines = []
 
+    
+    def lineReceived(self, line):
+        self.lines.append(line)
+
+    
+    def eomReceived(self):
+        print("New message received:")
+        msg = "\n".join(self.lines)
+        self.lines = None
+
+        print(msg)
+        fn = sha256(msg).hexdigest()
+        with open(os.path.join("..", "mailbox", self.dest, fn), "w") as f:
+            f.write(msg)
+        
+        return defer.succeed(None)
+
+    
+    def connectionLost(self):
+        # There was an error, throw away the stored lines
+        self.lines = None
+
+    
 @implementer(smtp.IMessage)
 class ConsoleMessage:
     def __init__(self):
