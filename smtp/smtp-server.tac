@@ -18,6 +18,7 @@ from twisted.internet import defer
 from twisted.logger import Logger
 from twisted.mail import smtp
 from twisted.mail.imap4 import LOGINCredentials, PLAINCredentials
+from twisted.mail.maildir import MaildirMailbox
 
 from twisted.cred.checkers import InMemoryUsernamePasswordDatabaseDontUse
 from twisted.cred.portal import IRealm
@@ -44,9 +45,35 @@ class ConsoleMessageDelivery:
         if user.dest.local == "console":
             return lambda: ConsoleMessage()
         elif str(user.dest) == "ben@test.org":
-            return lambda: DeliverMessage(str(user.dest))
+            #return lambda: DeliverMessage(str(user.dest))
+            maildir = os.path.join("..", "mailbox", str(user.dest))
+            return lambda: DeliverMailbox(maildir)
         raise smtp.SMTPBadRcpt(user)
 
+@implementer(smtp.IMessage)
+class DeliverMailbox:
+    def __init__(self, dest):
+        self.mailbox = MaildirMailbox(dest)
+        self.lines = []
+
+    
+    def lineReceived(self, line):
+        self.lines.append(line)
+
+    
+    def eomReceived(self):
+        print("New message received:")
+        msg = "\n".join(self.lines)
+        self.lines = None
+
+        print(msg)
+
+        return self.mailbox.appendMessage(msg)
+
+    
+    def connectionLost(self):
+        # There was an error, throw away the stored lines
+        self.lines = None
 
 @implementer(smtp.IMessage)
 class DeliverMessage:

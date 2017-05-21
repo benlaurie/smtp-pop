@@ -12,6 +12,7 @@ from twisted.cred.portal import Portal, IRealm
 from twisted.internet.protocol import ServerFactory
 from twisted.logger import Logger
 from twisted.mail import pop3
+from twisted.mail.maildir import MaildirMailbox
 from twisted.mail.pop3 import IMailbox
 from twisted.cred.checkers import InMemoryUsernamePasswordDatabaseDontUse
 from zope.interface import implements
@@ -97,7 +98,8 @@ class SimpleRealm:
     def requestAvatar(self, avatarId, mind, *interfaces):
         if IMailbox in interfaces:
             #return IMailbox, SimpleMailbox(), lambda: None
-            return IMailbox, DiskMailbox(avatarId + "@test.org"), lambda: None
+            #return IMailbox, DiskMailbox(avatarId + "@test.org"), lambda: None
+            return IMailbox, MaildirMailbox(os.path.join("..", "mailbox", avatarId + "@test.org")), lambda: None
         else:
             raise NotImplementedError()
 
